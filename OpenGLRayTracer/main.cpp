@@ -2,6 +2,8 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -9,6 +11,59 @@ void processInput(GLFWwindow* window);
 // settings
 const unsigned int SCR_WIDTH = 1920 * 0.6;
 const unsigned int SCR_HEIGHT = 1080 * 0.6;
+
+std::string readFile(const std::string& filePath)
+{
+    std::ifstream file(filePath);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+int compileShader(GLenum shaderType, const std::string& shaderSource)
+{
+    int success;
+    char infoLog[512];
+
+    unsigned int shader = glCreateShader(shaderType);
+    const char* shaderCode = shaderSource.c_str();
+    glShaderSource(shader, 1, &shaderCode, nullptr);
+    glCompileShader(shader);
+
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        std::cout << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
+        return -1;
+    }
+
+    return shader;
+}
+
+int linkShaderProgram(unsigned int vertexShader, unsigned int fragmentShader)
+{
+    int success;
+    char infoLog[512];
+
+    unsigned int shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success)
+    {
+        glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+        std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+        return -1;
+    }
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return shaderProgram;
+}
 
 int main()
 {
@@ -23,8 +78,8 @@ int main()
 #endif
 
     // instanciate window
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", nullptr, nullptr);
+    if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -56,10 +111,6 @@ int main()
             1.0f, -1.0, 0.0f
         };
 
-        //set up info log and marker for debugging
-        int success;
-        char infoLog[512];
-
         // set up the vertex array object
         unsigned int VAO;
         glGenVertexArrays(1, &VAO);
@@ -76,56 +127,15 @@ int main()
         glEnableVertexAttribArray(0);
 
         // set up the vertex shader
-        const char* vertexShaderSource = "#version 430 core\n"
-            "layout (location = 0) in vec3 aPos;\n"
-            "void main()\n"
-            "{\n"
-            "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-            "}\0";
-        unsigned int vertexShader;
-        vertexShader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-        glCompileShader(vertexShader);
-
-        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-        if (!success)
-        {
-            glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-            std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-        }
+        std::string vertexShaderSource = readFile("vertexShader.glsl");
+        unsigned int vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
 
         // set up the fragment shader
-        const char* fragmentShaderSource = "#version 430 core\n"
-            "out vec4 FragColor;\n"
-            "void main()\n"
-            "{\n"
-            "   FragColor = vec4(0.9f, 0.8f, 0.0f, 1.0f);\n"
-            "}\0";
-        unsigned int fragmentShader;
-        fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-        glCompileShader(fragmentShader);
-        glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-        if (!success)
-        {
-            glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-            std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
-        }
+        std::string fragmentShaderSource = readFile("fragmentShader.glsl");
+        unsigned int fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
 
         // create and link shader program
-        unsigned int shaderProgram;
-        shaderProgram = glCreateProgram();
-        glAttachShader(shaderProgram, vertexShader);
-        glAttachShader(shaderProgram, fragmentShader);
-        glLinkProgram(shaderProgram);
-        glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-        if (!success)
-        {
-            glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-            std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
-        }
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
+        unsigned int shaderProgram = linkShaderProgram(vertexShader, fragmentShader);
 
         // render
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -134,7 +144,7 @@ int main()
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved, etc.)
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
