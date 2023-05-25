@@ -103,12 +103,15 @@ int main()
 
         // declare vertices of render object
         float vertices[] = {
-            -1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 0.0f,
             1.0f, 1.0f, 0.0f,
+            1.0f, -1.0f, 0.0f,
             -1.0f, -1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            1.0f, -1.0, 0.0f
+            -1.0f, 1.0f, 0.0f
+        };
+
+        unsigned int indicies[] = {
+            0, 1, 3,
+            1, 2, 3
         };
 
         // set up the vertex array object
@@ -126,6 +129,12 @@ int main()
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
 
+        // set up the element buffer object
+        unsigned int EBO;
+        glGenBuffers(1, &EBO);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_STATIC_DRAW);
+
         // set up the vertex shader
         std::string vertexShaderSource = readFile("vertexShader.glsl");
         unsigned int vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
@@ -141,8 +150,10 @@ int main()
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(shaderProgram);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(EBO);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);      // wireframe for debugging
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved, etc.)
         glfwSwapBuffers(window);
