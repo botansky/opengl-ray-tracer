@@ -9,180 +9,223 @@ const float epsilon = 0.001;
 // define the number of samples for indirect lighting
 const int numSamples = 16;
 
-// define screen resolution
-uniform vec2 resolution = vec2(1920 * 0.6, 1920 * 0.6);
+// define the maximum distance for ray intersection
+const float MAX_DISTANCE = 100.0;
 
-// define camera properties
-uniform vec3 cameraPosition = vec3(0.0, 0.0, -1.0);
-uniform vec3 cameraTarget = vec3(0.0);
-uniform vec3 cameraUp = vec3(0.0, 1.0, 0.0);
+// define the maximum depth for ray recursion
+const int MAX_DEPTH = 5;
+
+// define screen resolution
+uniform vec2 resolution = vec2(1920 * 0.6, 1080 * 0.6);
 
 // structure for holding intersection information
 struct IntersectResult {
     bool hit;
     vec3 position;
     vec3 normal;
-    // add any additional relevant information here
 };
 
-// structure for holding material properties
-struct Material {
-    vec3 color;
-    // add any additional material properties here
+// light struct
+struct Light {
+    vec3 position;  // Light position
+    vec3 color;     // Light color
+    float intensity;    // Light intensity
 };
+
+// material struct
+struct Material {
+    vec3 color;         // surface color
+    vec3 specularColor; // specular color
+    float roughness;    // surface roughness
+    float reflection;   // reflection coefficient
+    float refraction;   // refraction coefficient
+    float ior;          // index of refraction
+};
+
+// sphere struct
+struct Sphere {
+    vec3 center;        // sphere center position
+    float radius;       // sphere radius
+    Material material;  // sphere material
+};
+
+// scene data
+const int numSpheres = 3;
+const int numLights = 3;
+Sphere spheres[numSpheres];
+Light lights[numLights];
+
+// camera settings
+vec3 cameraPosition = vec3(0.0, 0.0, -5.0);
+vec3 cameraTarget = vec3(0.0, 0.0, 0.0);
+vec3 cameraUp = vec3(0.0, 1.0, 0.0);
+vec3 cameraRight = vec3(1.0, 0.0, 0.0);
 
 // scene setup function
 void setupScene() {
-    // define your scene objects, materials, and light sources here
-    // ...
+    // define sphere 1: Red
+    spheres[0].center = vec3(-2.0, 0.0, 0.0);
+    spheres[0].radius = 1.0;
+    spheres[0].material.color = vec3(1.0, 0.0, 0.0);
+    spheres[0].material.specularColor = vec3(1.0, 1.0, 1.0);
+    spheres[0].material.roughness = 32.0;
+    spheres[0].material.reflection = 0.5;
+    spheres[0].material.refraction = 0.0;
+    spheres[0].material.ior = 1.0;
 
-    // set up any necessary data structures or buffers
-    // ...
+    // define sphere 2: Blue
+    spheres[1].center = vec3(0.0, 0.0, 0.0);
+    spheres[1].radius = 1.0;
+    spheres[1].material.color = vec3(0.0, 0.0, 1.0);
+    spheres[1].material.specularColor = vec3(1.0, 1.0, 1.0);
+    spheres[1].material.roughness = 16.0;
+    spheres[1].material.reflection = 0.0;
+    spheres[1].material.refraction = 0.5;
+    spheres[1].material.ior = 1.5;
+
+    // define sphere 3: Yellow
+    spheres[2].center = vec3(2.0, 0.0, 0.0);
+    spheres[2].radius = 1.0;
+    spheres[2].material.color = vec3(1.0, 1.0, 0.0);
+    spheres[2].material.specularColor = vec3(1.0, 1.0, 1.0);
+    spheres[2].material.roughness = 8.0;
+    spheres[2].material.reflection = 0.8;
+    spheres[2].material.refraction = 0.0;
+    spheres[2].material.ior = 1.0;
+
+    // define light 1: Red
+    lights[0].position = vec3(-5.0, 5.0, -5.0);
+    lights[0].color = vec3(1.0, 0.0, 0.0);
+    lights[0].intensity = 0.8;
+
+    // define light 2: Blue
+    lights[1].position = vec3(0.0, 5.0, -5.0);
+    lights[1].color = vec3(0.0, 0.0, 1.0);
+    lights[1].intensity = 0.6;
+
+    // define light 3: Yellow
+    lights[2].position = vec3(5.0, 5.0, -5.0);
+    lights[2].color = vec3(1.0, 1.0, 0.0);
+    lights[2].intensity = 0.6;
 }
 
-// main ray tracing function
-vec3 traceRay(vec2 uv) {
-    // compute ray origin and direction from uv coordinates
-    vec2 deviceCoords = (uv / resolution) * 2 - 1;  // getting the local device coordinates from the resultion in range [-1, 1]
-    vec4 rayDirection = vec4(deviceCoords.x, deviceCoords.y, -1.0, 0.0);    // compute the ray direction from the position of each pixel
-
-    // compute the camera's view inverse matrix that converts camera coordinates to world coordinates
-    vec3 cameraForward = normalize(cameraTarget - cameraPosition);
-    vec3 worldUp = vec3(0.0, 1.0, 0.0);
-    vec3 cameraRight = normalize(cross(worldUp, cameraForward));
-    
-    // create the camera's view matrix to get its inverse
-    mat4 cameraViewMatrix = mat4(
-        vec4(cameraRight, 0.0),
-        vec4(cameraUp, 0.0),
-        vec4(-cameraForward, 0.0),
-        vec4(cameraPosition, 0.0)
-    );
-
-    mat4 cameraViewInverse = inverse(cameraViewMatrix);
-
-    // get normalized ray direction in world space
-    rayDirection = cameraViewInverse * rayDirection;  // convert ray direction to world coordinates
-    rayDirection = (normalize(rayDirection));
-
-    // perform ray tracing
-    // ...
-
-    // return the final color
-    return vec3(1.0); // placeholder for now
-}
-
-// check for sphere intersection through quadratic method
-bool intersectSphere(vec3 rayOrigin, vec3 rayDirection, vec3 sphereCenter, float sphereRadius, out float t) {
-    vec3 oc = rayOrigin - sphereCenter;
-    float a = dot(rayDirection, rayDirection);
-    float b = 2.0 * dot(oc, rayDirection);
+// ray-sphere intersection function
+bool intersectRaySphere(vec3 origin, vec3 direction, vec3 sphereCenter, float sphereRadius, out float t) {
+    vec3 oc = origin - sphereCenter;
+    float a = dot(direction, direction);
+    float b = 2.0 * dot(oc, direction);
     float c = dot(oc, oc) - sphereRadius * sphereRadius;
     float discriminant = b * b - 4.0 * a * c;
-
-    if (discriminant > 0.0) {
-        float t0 = (-b - sqrt(discriminant)) / (2.0 * a);
-        float t1 = (-b + sqrt(discriminant)) / (2.0 * a);
-        if (t0 > 0.0) {
-            t = t0;
-            return true;
-        } else if (t1 > 0.0) {
-            t = t1;
-            return true;
-        }
+    if (discriminant < 0.0) {
+        t = MAX_DISTANCE;
+        return false;
     }
-
+    float sqrtDiscriminant = sqrt(discriminant);
+    float t0 = (-b - sqrtDiscriminant) / (2.0 * a);
+    float t1 = (-b + sqrtDiscriminant) / (2.0 * a);
+    if (t0 > 0.0 && t0 < t1) {
+        t = t0;
+        return true;
+    }
+    if (t1 > 0.0) {
+        t = t1;
+        return true;
+    }
+    t = MAX_DISTANCE;
     return false;
 }
 
-// check for triangle intersection through Möller-Trumbore method (adapted from Wikipedia's C++ implementation)
-// https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-bool intersectTriangle(vec3 rayOrigin, vec3 rayVector, vec3 vertex0, vec3 vertex1, vec3 vertex2, out vec3 outIntersectionPoint) {
-    const float EPSILON = 0.0000001;
-    vec3 edge1, edge2, h, s, q;
-    float a, f, u, v;
-    edge1 = vertex1 - vertex0;
-    edge2 = vertex2 - vertex0;
-    h = cross(rayVector, edge2);
-    a = dot(edge1, h);
+// compute sphere normal at a given surface position
+vec3 computeSphereNormal(vec3 surfacePosition, vec3 sphereCenter) {
+    return normalize(surfacePosition - sphereCenter);
+}
 
-    if (abs(a) < EPSILON)
-        return false;    // this ray is parallel to this triangle
+// compute reflection direction
+vec3 computeReflectionDirection(vec3 incident, vec3 normal) {
+    return reflect(incident, normal);
+}
 
-    f = 1.0 / a;
-    s = rayOrigin - vertex0;
-    u = f * dot(s, h);
+// compute refraction direction using Snell's law
+vec3 computeRefractionDirection(vec3 incident, vec3 normal, float ior) {
+    float cosTheta = dot(-incident, normal);
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    vec3 refractionDirection = (ior * incident) + ((ior * cosTheta - sinTheta) * normal);
+    return normalize(refractionDirection);
+}
 
-    if (u < 0.0 || u > 1.0)
-        return false;
+// calculate Fresnel factor for reflection and refraction
+vec3 computeFresnelFactor(vec3 incident, vec3 normal, float ior) {
+    float cosTheta = dot(-incident, normal);
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    float cosPhi = sqrt(1.0 - (1.0 / (ior * ior)) * (1.0 - cosTheta * cosTheta));
+    float parallel = ((ior * cosTheta) - cosPhi) / ((ior * cosTheta) + cosPhi);
+    float perpendicular = (cosTheta - (ior * cosPhi)) / (cosTheta + (ior * cosPhi));
+    return vec3(parallel * parallel, perpendicular * perpendicular, 1.0);
+}
 
-    q = cross(s, edge1);
-    v = f * dot(rayVector, q);
-
-    if (v < 0.0 || u + v > 1.0)
-        return false;
-
-    // at this stage we can compute t to find out where the intersection point is on the line
-    float t = f * dot(edge2, q);
-
-    if (t > EPSILON) { // ray intersection
-        outIntersectionPoint = rayOrigin + rayVector * t;
-        return true;
+// compute lighting at a given point on the surface
+vec3 computeLighting(vec3 surfacePosition, vec3 surfaceNormal, Material material) {
+    vec3 viewDirection = normalize(cameraPosition - surfacePosition);
+    vec3 finalColor = vec3(0.0, 0.0, 0.0);
+    for (int i = 0; i < numLights; i++) {
+        vec3 lightDirection = normalize(lights[i].position - surfacePosition);
+        float lightDistance = length(lights[i].position - surfacePosition);
+        float attenuation = 1.0 / (1.0 + 0.1 * lightDistance + 0.01 * (lightDistance * lightDistance));
+        float diffuse = max(dot(surfaceNormal, lightDirection), 0.0);
+        vec3 reflectionDirection = computeReflectionDirection(-lightDirection, surfaceNormal);
+        float specular = pow(max(dot(reflectionDirection, viewDirection), 0.0), material.roughness);
+        vec3 lightColor = lights[i].color * lights[i].intensity;
+        vec3 diffuseColor = material.color * diffuse;
+        vec3 specularColor = material.specularColor * specular;
+        finalColor += attenuation * (diffuseColor + specularColor) * lightColor;
     }
-    else // this means that there is a line intersection but not a ray intersection
-        return false;
+    return finalColor;
 }
 
-
-// scene intersection function
-IntersectResult intersectScene(vec3 rayOrigin, vec3 rayDirection) {
-    // implement your ray-object intersection tests here
-    // ...
-
-    // placeholder implementation for now
-    IntersectResult result;
-    result.hit = false;
-    return result;
+// ray tracing function
+vec3 rayTracing(vec3 origin, vec3 direction, int depth) {
+    if (depth >= MAX_DEPTH) {
+        return vec3(0.0, 0.0, 0.0);
+    }
+    vec3 surfaceColor = vec3(0.0, 0.0, 0.0);
+    float t = MAX_DISTANCE;
+    int hitSphere = -1;
+    for (int i = 0; i < numSpheres; i++) {
+        float sphereT;
+        if (intersectRaySphere(origin, direction, spheres[i].center, spheres[i].radius, sphereT) && sphereT < t) {
+            t = sphereT;
+            hitSphere = i;
+        }
+    }
+    if (hitSphere != -1) {
+        vec3 surfacePosition = origin + t * direction;
+        vec3 surfaceNormal = computeSphereNormal(surfacePosition, spheres[hitSphere].center);
+        Material material = spheres[hitSphere].material;
+        surfaceColor = computeLighting(surfacePosition, surfaceNormal, material);
+        vec3 reflectionDirection = computeReflectionDirection(direction, surfaceNormal);
+        vec3 reflectionColor = material.reflection * rayTracing(surfacePosition, reflectionDirection, depth + 1);
+        surfaceColor += reflectionColor;
+        if (material.refraction > 0.0) {
+            vec3 refractionDirection = computeRefractionDirection(direction, surfaceNormal, material.ior);
+            vec3 refractionColor = material.refraction * rayTracing(surfacePosition, refractionDirection, depth + 1);
+            surfaceColor += refractionColor;
+        }
+    }
+    return surfaceColor;
 }
 
-// shading function
-vec3 shade(vec3 surfacePosition, vec3 surfaceNormal, Material material) {
-    // implement your shading model here
-    // ...
+out vec4 fragColor;
 
-    // placeholder implementation for now
-    return material.color;
-}
-
-// compute direct lighting from light sources
-vec3 computeDirectLighting(vec3 surfacePosition, vec3 surfaceNormal) {
-    // compute direct lighting contributions from light sources
-    // ...
-
-    // placeholder implementation for now
-    return vec3(1.0); // White color
-}
-
-// random hemisphere direction function
-vec3 randomHemisphereDirection(vec3 surfaceNormal) {
-    // generate a random direction within the hemisphere oriented around the surface normal
-    // ...
-
-    // placeholder implementation for now
-    return normalize(vec3(0.0, 1.0, 0.0)); // Up direction
-}
-
-// entry point function
-void main() {
-    // set up the scene
-    setupScene();
-
-    // obtain the UV coordinates for the current fragment
-    vec2 uv = gl_FragCoord.xy / resolution; // Adjust resolution as needed
-
-    // trace the ray and obtain the final color
-    vec3 finalColor = traceRay(uv);
-
-    // output the final color to the screen
-    gl_FragColor = vec4(finalColor, 1.0);
+// render function
+void render() {
+    for (int y = 0; y < int(resolution.y); y++) {
+        for (int x = 0; x < int(resolution.x); x++) {
+            float u = (2.0 * float(x) - resolution.x) / resolution.y;
+            float v = (2.0 * float(y) - resolution.y) / resolution.y;
+            vec3 direction = normalize(cameraTarget - cameraPosition + u * cameraRight + v * cameraUp);
+            vec3 color = rayTracing(cameraPosition, direction, 0);
+            // output color to the frame buffer
+            fragColor = vec4(color, 1.0);
+        }
+    }
 }
